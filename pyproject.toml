@@ -1,0 +1,23 @@
+[project]
+name = "my-project"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.11"
+dependencies = [
+    "blinker==1.9.0",
+    "click==8.3.1",
+    "flask>=2.3.0,<3.0",
+    "flask-sqlalchemy>=3.0.0",
+    "gevent==25.9.1",
+    "greenlet==3.3.1",
+    "gunicorn==25.1.0",
+    "itsdangerous==2.2.0",
+    "jinja2==3.1.6",
+    "markupsafe==3.0.3",
+    "packaging==26.0",
+    "psycogreen>=1.0.2",
+    "psycopg2-binary>=2.9.11",
+    "werkzeug==3.1.6",
+    "zope-event==6.1",
+    "zope-interface==8.2",
+]
