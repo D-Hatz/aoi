@@ -12,6 +12,9 @@ from .sequence import FileSequence
 session_sequence = FileSequence("logs/session_sequence.txt")
 
 
+COMMENT_ATTRIBUTE = "comment"
+
+
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -73,6 +76,40 @@ class RouteSession(Session):
             self.engine_bind = self._db.engines.get(bind)
         else:
             self.engine_bind = bind
+
+
+@sa.event.listens_for(sa.Engine, "before_cursor_execute", retval=True)
+def _apply_comment(connection, cursor, statement, parameters, context, executemany):
+    """
+    Apply comments to statements.
+
+    We intercept all statement executions at the cursor level, where the
+    before_cursor_execute() event gives us the final string SQL statement
+    in all cases and also gives us a chance to modify the string.
+
+    Based on: https://github.com/sqlalchemy/sqlalchemy/wiki/SessionModifiedSQL
+    """
+
+    session_info = connection.info.get("session_info", {})
+
+    if COMMENT_ATTRIBUTE in session_info:
+        comment = session_info[COMMENT_ATTRIBUTE]
+        statement = f"/* {comment} */ {statement}"
+
+    return statement, parameters
+
+
+@sa.event.listens_for(RouteSession, "after_begin")
+def _connection_for_session(session, trans, connection):
+    """Share the 'info' dictionary of Session with Connection
+    objects.
+
+    This occurs as new Connection objects are associated with the
+    Session.   The .info dictionary on Connection is local to the
+    DBAPI connection.
+
+    """
+    connection.info["session_info"] = session.info
 
 
 db = RouteSQLAlchemy(session_options={"class_": RouteSession})

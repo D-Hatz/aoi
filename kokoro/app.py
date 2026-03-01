@@ -8,7 +8,8 @@ from flask import Flask
 from sqlalchemy import text
 
 from .database import db
-from .sqlalchemy_decorators import set_route_bind
+from .sqlalchemy_decorators import set_route_bind, with_query_comment
+from .sqlalchemy_contextmanager import query_comment
 from .sqlalchemy_logging import setup_pool_logging
 from .sqlalchemy_utils import inspect_session
 
@@ -248,3 +249,47 @@ def debug_inspect_session_engine_url():
     )
 
     return resp
+
+
+@app.route("/debug/comment/decorator")
+@with_query_comment("endpoint=/debug/comment/decorator test=decorator")
+def debug_comment_decorator():
+    """
+    Debug endpoint to test query commenting via decorator.
+    
+    Test:
+        curl -s http://localhost:8000/debug/comment/decorator
+    
+    Check PostgreSQL logs for:
+        /* endpoint=/debug/comment/decorator test=decorator */ SELECT ...
+    """
+    stmt = text("SELECT pg_backend_pid(), current_database()")
+    result = db.session.execute(stmt).fetchone()
+    
+    return {
+        "pid": result[0],
+        "database": result[1],
+        "comment_method": "decorator",
+    }
+
+
+@app.route("/debug/comment/contextmanager")
+def debug_comment_contextmanager():
+    """
+    Debug endpoint to test query commenting via context manager.
+    
+    Test:
+        curl -s http://localhost:8000/debug/comment/contextmanager
+    
+    Check PostgreSQL logs for:
+        /* endpoint=/debug/comment/contextmanager test=contextmanager */ SELECT ...
+    """
+    with query_comment("endpoint=/debug/comment/contextmanager test=contextmanager"):
+        stmt = text("SELECT pg_backend_pid(), current_database()")
+        result = db.session.execute(stmt).fetchone()
+    
+    return {
+        "pid": result[0],
+        "database": result[1],
+        "comment_method": "contextmanager",
+    }

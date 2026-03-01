@@ -7,6 +7,7 @@ Provides decorators for controlling database behavior in Flask routes.
 from functools import wraps
 
 from .database import db
+from .sqlalchemy_contextmanager import query_comment
 
 
 def set_route_bind(bind_name: str):
@@ -38,6 +39,35 @@ def set_route_bind(bind_name: str):
                 return func(*args, **kwargs)
             finally:
                 db.session.set_bind(original_bind)
+
+        return wrapper
+
+    return decorator
+
+
+def with_query_comment(comment: str):
+    """
+    Decorator to add comment to all queries in a route.
+
+    WARNING: Only use string literals - no f-strings or .format().
+
+    Usage:
+         @app.route("/users")
+         @set_route_bind("other")
+         @with_query_comment("endpoint=/users readonly=true")
+         def get_users():
+             return db.session.execute(text("SELECT * FROM users")).fetchall()
+
+
+    Note:
+        Decorator order matters - @with_query_comment should come AFTER @app.route
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with query_comment(comment):
+                return func(*args, **kwargs)
 
         return wrapper
 
