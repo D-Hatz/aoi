@@ -7,7 +7,10 @@ import gevent
 from flask import Flask
 from sqlalchemy import text
 
-from .database import db, inspect_session, setup_pool_logging, set_route_bind
+from .database import db
+from .sqlalchemy_decorators import set_route_bind
+from .sqlalchemy_logging import setup_pool_logging
+from .sqlalchemy_utils import inspect_session
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +45,7 @@ def create_app():
     db.init_app(app)
 
     with app.app_context():
-        setup_pool_logging()
+        setup_pool_logging(db)
 
     return app
 
@@ -98,7 +101,7 @@ def debug_route_bind_read():
     stmt = text("SELECT pg_backend_pid(), current_database()")
     result = db.session.execute(stmt).fetchone()
 
-    info = inspect_session()
+    info = inspect_session(db)
     info["pid"] = result[0]
     info["database"] = result[1]
 
@@ -122,7 +125,7 @@ def debug_route_bind_write():
     stmt = text("SELECT pg_backend_pid(), current_database()")
     result = db.session.execute(stmt).fetchone()
 
-    info = inspect_session()
+    info = inspect_session(db)
     info["pid"] = result[0]
     info["database"] = result[1]
 

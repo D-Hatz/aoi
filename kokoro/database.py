@@ -4,10 +4,7 @@ import typing as t
 import sqlalchemy as sa
 from flask_sqlalchemy import SQLAlchemy
 from flask_sqlalchemy.session import Session
-from sqlalchemy import event
 from sqlalchemy.exc import UnboundExecutionError
-
-from functools import wraps
 
 from .sequence import FileSequence
 
@@ -76,89 +73,6 @@ class RouteSession(Session):
             self.engine_bind = self._db.engines.get(bind)
         else:
             self.engine_bind = bind
-
-
-def setup_pool_logging():
-    """Log connection pool activity per engine."""
-    import gevent
-
-    for bind_name, engine in db.engines.items():
-        name = bind_name if bind_name is not None else "default"
-
-        @event.listens_for(engine, "connect")
-        def on_connect(dbapi_conn, connection_record, _name=name):
-            print(f"[POOL:{_name}] New connection: {id(dbapi_conn)}")
-
-        @event.listens_for(engine, "checkout")
-        def on_checkout(dbapi_conn, connection_record, connection_proxy, _name=name):
-            gid = id(gevent.getcurrent())
-            print(f"[POOL:{_name}] Checkout conn={id(dbapi_conn)} greenlet={gid}")
-
-        @event.listens_for(engine, "checkin")
-        def on_checkin(dbapi_conn, connection_record, _name=name):
-            gid = id(gevent.getcurrent())
-            print(f"[POOL:{_name}] Checkin conn={id(dbapi_conn)} greenlet={gid}")
-
-
-def inspect_session():
-    """Show session and pool stats"""
-    session = db.session()
-    info = {
-        "default_bind": str(session.get_bind().url),
-        "session_sequence_id": session._unique_id,
-        "session_id": id(session),
-        "is_active": session.is_active,
-        "pools": {},
-    }
-
-    for bind_name, engine in db.engines.items():
-        key = bind_name if bind_name is not None else "default"
-        pool = engine.pool
-        info["pools"][key] = {
-            "url": str(engine.url),
-            "is_current": session.get_bind() is engine,
-            "pool_size": pool.size(),
-            "checked_out": pool.checkedout(),
-            "checked_in": pool.checkedin(),
-            "overflow": pool.overflow(),
-        }
-
-    return info
-
-
-def set_route_bind(bind_name: str):
-    """
-    Decorator to route all database queries in a request to a specific bind.
-
-    Sets the session's engine_bind before the route executes, and restores
-    the original bind after completion (even if an exception occurs).
-
-    Args:
-        bind_name: Name of the bind (must exist in SQLALCHEMY_BINDS)
-
-    Usage:
-        @app.route("/read")
-        @set_route_bind("replica")
-        def read_data():
-            return db.session.execute(text("SELECT ...")).fetchall()
-
-    Note:
-        Decorator order matters - @set_route_bind must come AFTER @app.route
-    """
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            original_bind = db.session.get_bind()
-            db.session.set_bind(bind_name)
-            try:
-                return func(*args, **kwargs)
-            finally:
-                db.session.set_bind(original_bind)
-
-        return wrapper
-
-    return decorator
 
 
 db = RouteSQLAlchemy(session_options={"class_": RouteSession})
