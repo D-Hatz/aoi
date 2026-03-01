@@ -26,7 +26,7 @@ def setup_pool_logging(db: SQLAlchemy) -> None:
             setup_pool_logging(db)
     """
     for bind_name, engine in db.engines.items():
-        name = bind_name if bind_name is not None else "default"
+        name = bind_name if bind_name is not None else "primary"
 
         @event.listens_for(engine, "connect")
         def on_connect(dbapi_conn, connection_record, _name=name):

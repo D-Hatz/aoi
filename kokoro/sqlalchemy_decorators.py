@@ -53,7 +53,7 @@ def with_query_comment(comment: str):
 
     Usage:
          @app.route("/users")
-         @set_route_bind("other")
+         @set_route_bind("replica")
          @with_query_comment("endpoint=/users readonly=true")
          def get_users():
              return db.session.execute(text("SELECT * FROM users")).fetchall()

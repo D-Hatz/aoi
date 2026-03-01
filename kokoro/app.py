@@ -22,7 +22,7 @@ def create_app():
 
     app.config |= {
         "SQLALCHEMY_BINDS": {
-            "other": {
+            "replica": {
                 "url": "postgresql://postgres:postgres@localhost:5432/other_db",
                 "pool_size": 1,
                 "max_overflow": 0,
@@ -32,7 +32,7 @@ def create_app():
                 "isolation_level": "AUTOCOMMIT",
                 "skip_autocommit_rollback": True,
             },
-            "default": {
+            "primary": {
                 "url": "postgresql://postgres:postgres@localhost:5432/postgres",
                 "pool_size": 1,
                 "max_overflow": 0,
@@ -86,12 +86,12 @@ def debug_pool_contention():
 
 
 @app.route("/read")
-@set_route_bind("other")
+@set_route_bind("replica")
 def debug_route_bind_read():
     """
-    Debug endpoint to verify read routing to "other" bind.
+    Debug endpoint to verify read routing to "replica" bind.
 
-    Uses @set_route_bind("other") decorator to route queries
+    Uses @set_route_bind("replica") decorator to route queries
     to the read replica (other_db with AUTOCOMMIT isolation).
 
     Test:
@@ -110,12 +110,12 @@ def debug_route_bind_read():
 
 
 @app.route("/write")
-@set_route_bind("default")
+@set_route_bind("primary")
 def debug_route_bind_write():
     """
-    Debug endpoint to verify write routing to "default" bind.
+    Debug endpoint to verify write routing to "primary" bind.
 
-    Uses @set_route_bind("default") decorator to route queries
+    Uses @set_route_bind("primary") decorator to route queries
     to the primary database (postgres with transaction support).
 
     Test:
@@ -223,11 +223,11 @@ def debug_inspect_session_engine_url():
     resp: dict[str, t.Any] = {}
 
     session = db.session()
-    db.session.set_bind("other")
+    db.session.set_bind("replica")
 
     resp.update(
         {
-            "other_bind_url": {
+            "replica_bind_url": {
                 "url": db.session.get_engine_url(),
                 "session_sequnece_id": session._unique_id,
                 "session_id": id(session),
@@ -236,10 +236,10 @@ def debug_inspect_session_engine_url():
         }
     )
 
-    db.session.set_bind("default")
+    db.session.set_bind("primary")
     resp.update(
         {
-            "default_bind_url": {
+            "primary_bind_url": {
                 "url": db.session.get_engine_url(),
                 "session_sequnece_id": session._unique_id,
                 "session_id": id(session),

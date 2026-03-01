@@ -39,7 +39,7 @@ def inspect_session(db: SQLAlchemy) -> dict:
     }
 
     for bind_name, engine in db.engines.items():
-        key = bind_name if bind_name is not None else "default"
+        key = bind_name if bind_name is not None else "primary"
         pool = engine.pool
         info["pools"][key] = {
             "url": str(engine.url),

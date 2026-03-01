@@ -26,6 +26,17 @@ Flask + SQLAlchemy + gevent reference implementation.
 
 ---
 
+## Database Binds
+
+| Bind | Database | Purpose |
+|------|----------|---------|
+| `primary` | postgres | Main database (read/write) |
+| `replica` | other_db | Read replica (AUTOCOMMIT) |
+
+**Note:** Alembic migrations only run against the `primary` database. Multiple bind migrations are not supported. If using a true read replica, it will sync automatically via PostgreSQL replication.
+
+---
+
 ## Setup
 
 ### PostgreSQL
@@ -65,10 +76,10 @@ curl -s http://localhost:8000/debug/comment/decorator
 # Query comment - context manager
 curl -s http://localhost:8000/debug/comment/contextmanager
 
-# Read routing (other_db)
+# Read routing (replica)
 curl -s http://localhost:8000/read
 
-# Write routing (postgres)
+# Write routing (primary)
 curl -s http://localhost:8000/write
 
 # Pool contention test

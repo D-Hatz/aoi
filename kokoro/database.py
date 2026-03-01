@@ -68,7 +68,7 @@ class RouteSession(Session):
             selected_bind = None
 
         if selected_bind is None:
-            return self._db.engines.get("default")
+            return self._db.engines.get("primary")
 
     def set_bind(self, bind: sa.engine.Engine | sa.engine.Connection | str):
         """Override the bind to use for this session."""
