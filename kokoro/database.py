@@ -9,6 +9,11 @@ from sqlalchemy.exc import UnboundExecutionError
 
 from functools import wraps
 
+from .sequence import FileSequence
+
+
+session_sequence = FileSequence("logs/session_sequence.txt")
+
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -32,6 +37,10 @@ class RouteSession(Session):
     def __init__(self, db: SQLAlchemy, **kwargs: t.Any) -> None:
         super().__init__(db, **kwargs)
         self.engine_bind: sa.engine.Engine | None = None
+        self._unique_id = session_sequence.next()
+
+    def __repr__(self) -> str:
+        return f"<RouteSession(id={self._unique_id})>"
 
     def get_bind(
         self,
@@ -88,10 +97,12 @@ def setup_pool_logging():
 
 def inspect_session():
     """Show session and pool stats"""
+    session = db.session()
     info = {
-        "default_bind": str(db.session.get_bind().url),
-        "session_id": id(db.session),
-        "is_active": db.session.is_active,
+        "default_bind": str(session.get_bind().url),
+        "session_sequence_id": session._unique_id,
+        "session_id": id(session),
+        "is_active": session.is_active,
         "pools": {},
     }
 
@@ -100,7 +111,7 @@ def inspect_session():
         pool = engine.pool
         info["pools"][key] = {
             "url": str(engine.url),
-            "is_default": db.session.get_bind() is engine,
+            "is_current": session.get_bind() is engine,
             "pool_size": pool.size(),
             "checked_out": pool.checkedout(),
             "checked_in": pool.checkedin(),
@@ -116,19 +127,19 @@ db = RouteSQLAlchemy(session_options={"class_": RouteSession})
 def set_route_bind(bind_name: str):
     """
     Decorator to route all database queries in a request to a specific bind.
-    
+
     Sets the session's engine_bind before the route executes, and restores
     the original bind after completion (even if an exception occurs).
-    
+
     Args:
         bind_name: Name of the bind (must exist in SQLALCHEMY_BINDS)
-    
+
     Usage:
         @app.route("/read")
         @set_route_bind("replica")
         def read_data():
             return db.session.execute(text("SELECT ...")).fetchall()
-    
+
     Note:
         Decorator order matters - @set_route_bind must come AFTER @app.route
     """

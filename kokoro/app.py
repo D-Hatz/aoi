@@ -24,6 +24,7 @@ def create_app():
                 "pool_recycle": 1800,
                 "pool_pre_ping": True,
                 "isolation_level": "AUTOCOMMIT",
+                "skip_autocommit_rollback": True,
             },
             "default": {
                 "url": "postgresql://postgres:postgres@localhost:5432/postgres",
@@ -51,17 +52,17 @@ app = create_app()
 def debug_pool_contention():
     """
     Debug endpoint to test connection pool exhaustion behavior.
-    
+
     Executes a 3-second pg_sleep to hold a connection. With pool_size=1
     and max_overflow=0 per worker, each worker has 1 connection.
-    
+
     To see pool contention, requests must exceed: workers * pool_size
     With 4 workers and pool_size=1, need 5+ concurrent requests.
-    
+
     Test pool contention:
         for i in {1..9}; do curl -s http://localhost:8000/pool-contention & done; wait
-    
-    Expected: 
+
+    Expected:
         - First 4 requests: immediate (one per worker)
         - Requests 5-8: wait ~3s (waiting for pool)
         - Request 9: wait ~6s (second round of waiting)
@@ -83,13 +84,13 @@ def debug_pool_contention():
 def debug_route_bind_read():
     """
     Debug endpoint to verify read routing to "other" bind.
-    
+
     Uses @set_route_bind("other") decorator to route queries
     to the read replica (other_db with AUTOCOMMIT isolation).
-    
+
     Test:
         curl -s http://localhost:8000/read
-    
+
     Expected: database="other_db", confirms routing works.
     """
     stmt = text("SELECT pg_backend_pid(), current_database()")
@@ -107,13 +108,13 @@ def debug_route_bind_read():
 def debug_route_bind_write():
     """
     Debug endpoint to verify write routing to "default" bind.
-    
+
     Uses @set_route_bind("default") decorator to route queries
     to the primary database (postgres with transaction support).
-    
+
     Test:
         curl -s http://localhost:8000/write
-    
+
     Expected: database="postgres", confirms routing works.
     """
     stmt = text("SELECT pg_backend_pid(), current_database()")
@@ -146,15 +147,17 @@ def debug_session():
         curl -s http://localhost:8000/debug
         curl -s http://localhost:8000/debug
 
-    Expected: Same greenlet_id possible, but different session_id per request.
+    Expected: Same greenlet_id possible, but different session_sequence_id per request.
     """
+
     session = db.session()
 
     stmt = text("SELECT pg_sleep(3), pg_backend_pid(), current_database()")
-    db.session.execute(stmt).fetchone()
+    session.execute(stmt).fetchone()
 
     return {
         "greenlet_id": id(gevent.getcurrent()),
+        "session_sequence_id": session._unique_id,
         "session_id": id(session),
         "session_class": session.__class__.__name__,
         "engine_bind": id(session.engine_bind) if session.engine_bind else None,
