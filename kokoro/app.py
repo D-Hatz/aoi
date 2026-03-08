@@ -11,7 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from kokoro.models import User
 
-from .database import db
+from .database import RouteSession, db
 from .sqlalchemy_decorators import set_route_bind, with_query_comment
 from .sqlalchemy_contextmanager import query_comment
 from .sqlalchemy_logging import setup_pool_logging
@@ -423,3 +423,46 @@ def debug_optimistic_lock():
         }, 409
 
     return {"version_before": version_before, "version_after": str(user.version)}
+
+
+@app.route("/debug/leaked-session")
+def debug_leaked_session():
+    """
+    Demonstrates a leaked database connection caused by using_bind() creating an
+    unmanaged session outside Flask-SQLAlchemy's scoped session lifecycle.
+
+    db.session.using_bind() returns a standalone Session bound to the given engine.
+    Unlike db.session (scoped), this session is NOT registered with Flask-SQLAlchemy's
+    teardown — so it never gets closed, and the connection is never returned to the pool.
+
+    Pool log on first request:
+        New connection → connection created
+        Checkout       → connection acquired
+        (no Checkin)   → connection never returned ← leak
+
+    Validation — pool exhaustion is per worker, not per request:
+        With pool_size=1 and max_overflow=0, each worker has exactly 1 connection.
+        Leaked connections exhaust workers one at a time — requests landing on workers
+        with free connections succeed and also leak. Only when all workers are exhausted
+        does the next request block for pool_timeout=30s and raise QueuePool limit exceeded.
+
+        With 4 workers, the 5th request fails. To see failure on the 2nd request, use 1 worker:
+            gunicorn --workers 1 ...
+
+    Test:
+        curl -s http://localhost:8000/debug/leaked-session  # leaks connection on this worker
+        curl -s http://localhost:8000/debug/leaked-session  # may succeed on a different worker
+        # repeat until all workers are exhausted → 500 QueuePool timeout
+    """
+
+    session = db.session.using_bind("primary")
+
+    session.execute(
+        text("SELECT pg_sleep(3), pg_backend_pid(), current_database()")
+    ).fetchone()
+
+    # using_bind() returns an unmanaged session — never closed by Flask-SQLAlchemy teardown.
+    # The connection stays checked out until the process is recycled or the pool times out.
+    return {
+        "message": "Connection leaked — using_bind() session not managed by scoped session. Check pool logs: Checkout with no Checkin."
+    }

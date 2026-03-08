@@ -36,6 +36,7 @@ class RouteSQLAlchemy(SQLAlchemy):
             if self.session().get_bind()
             else None
         )
+        self.session.using_bind = lambda name: self.session().using_bind(name)
 
 
 class RouteSession(Session):
@@ -77,6 +78,21 @@ class RouteSession(Session):
         else:
             self.engine_bind = bind
 
+    def using_bind(self, name):
+        """
+        Return a new unmanaged session bound to the given engine name.
+
+        Unlike db.session (scoped), the returned session is NOT registered with
+        Flask-SQLAlchemy's teardown. It will never be closed automatically —
+        the caller is responsible for calling session.close(), otherwise the
+        connection is leaked and never returned to the pool.
+
+        Based on: https://techspot.zzzeek.org/2012/01/11/django-style-database-routers-in-sqlalchemy/
+        """
+        s = RouteSession(self._db)
+        vars(s).update(vars(self))
+        s._name = name
+        return s
 
 
 @sa.event.listens_for(sa.Engine, "before_cursor_execute", retval=True)
